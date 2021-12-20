@@ -21,10 +21,10 @@ var (
 
 // MailRoom holds the log mailboxes for all the log types that keeper cares about
 type MailRoom struct {
-	mbUpkeepCanceled   *utils.Mailbox
-	mbSyncRegistry     *utils.Mailbox
-	mbUpkeepPerformed  *utils.Mailbox
-	mbUpkeepRegistered *utils.Mailbox
+	mbUpkeepCanceled   *utils.Mailbox[log.Broadcast]
+	mbSyncRegistry     *utils.Mailbox[log.Broadcast]
+	mbUpkeepPerformed  *utils.Mailbox[log.Broadcast]
+	mbUpkeepRegistered *utils.Mailbox[log.Broadcast]
 }
 
 type RegistrySynchronizerOptions struct {
@@ -58,10 +58,10 @@ type RegistrySynchronizer struct {
 // NewRegistrySynchronizer is the constructor of RegistrySynchronizer
 func NewRegistrySynchronizer(opts RegistrySynchronizerOptions) *RegistrySynchronizer {
 	mailRoom := MailRoom{
-		mbUpkeepCanceled:   utils.NewMailbox(50),
-		mbSyncRegistry:     utils.NewMailbox(1),
-		mbUpkeepPerformed:  utils.NewMailbox(300),
-		mbUpkeepRegistered: utils.NewMailbox(50),
+		mbUpkeepCanceled:   utils.NewMailbox[log.Broadcast](50),
+		mbSyncRegistry:     utils.NewMailbox[log.Broadcast](1),
+		mbUpkeepPerformed:  utils.NewMailbox[log.Broadcast](300),
+		mbUpkeepRegistered: utils.NewMailbox[log.Broadcast](50),
 	}
 	return &RegistrySynchronizer{
 		chStop:                   make(chan struct{}),

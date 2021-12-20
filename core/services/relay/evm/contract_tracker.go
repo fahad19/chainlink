@@ -80,7 +80,7 @@ type ContractTracker struct {
 	lrrMu                sync.RWMutex
 
 	// ContractConfig
-	configsMB utils.Mailbox
+	configsMB utils.Mailbox[ocrtypes.ContractConfig]
 	chConfigs chan ocrtypes.ContractConfig
 
 	// LatestBlockHeight
@@ -124,7 +124,7 @@ func NewOCRContractTracker(
 		nil,
 		ocr2aggregator.OCR2AggregatorRoundRequested{},
 		sync.RWMutex{},
-		*utils.NewMailbox(configMailboxSanityLimit),
+		*utils.NewMailbox[ocrtypes.ContractConfig](configMailboxSanityLimit),
 		make(chan ocrtypes.ContractConfig),
 		-1,
 		sync.RWMutex{},
@@ -211,13 +211,9 @@ func (t *ContractTracker) processLogs() {
 			// new config. To avoid blocking the log broadcaster, we use this
 			// background thread to deliver them and a mailbox as the buffer.
 			for {
-				x, exists := t.configsMB.Retrieve()
+				cc, exists := t.configsMB.Retrieve()
 				if !exists {
 					break
-				}
-				cc, ok := x.(ocrtypes.ContractConfig)
-				if !ok {
-					panic(fmt.Sprintf("expected ocrtypes.ContractConfig but got %T", x))
 				}
 				select {
 				case t.chConfigs <- cc:

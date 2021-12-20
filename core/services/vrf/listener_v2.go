@@ -64,7 +64,7 @@ type listenerV2 struct {
 	job            job.Job
 	q              pg.Q
 	gethks         keystore.Eth
-	reqLogs        *utils.Mailbox
+	reqLogs        *utils.Mailbox[log.Broadcast]
 	chStop         chan struct{}
 	// We can keep these pending logs in memory because we
 	// only mark them confirmed once we send a corresponding fulfillment transaction.

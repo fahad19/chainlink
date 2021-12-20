@@ -152,7 +152,7 @@ func NewLogger() Logger {
 	var parseErrs []string
 
 	var invalid string
-	c.LogLevel, invalid = envvar.LogLevel.ParseLogLevel()
+	c.LogLevel, invalid = envvar.LogLevel.Parse()
 	if invalid != "" {
 		parseErrs = append(parseErrs, invalid)
 	}
@@ -160,23 +160,23 @@ func NewLogger() Logger {
 	c.Dir = os.Getenv("LOG_FILE_DIR")
 	if c.Dir == "" {
 		var invalid2 string
-		c.Dir, invalid2 = envvar.RootDir.ParseString()
+		c.Dir, invalid2 = envvar.RootDir.Parse()
 		if invalid2 != "" {
 			parseErrs = append(parseErrs, invalid2)
 		}
 	}
 
-	c.JsonConsole, invalid = envvar.JSONConsole.ParseBool()
+	c.JsonConsole, invalid = envvar.JSONConsole.Parse()
 	if invalid != "" {
 		parseErrs = append(parseErrs, invalid)
 	}
 
-	c.ToDisk, invalid = envvar.LogToDisk.ParseBool()
+	c.ToDisk, invalid = envvar.LogToDisk.Parse()
 	if invalid != "" {
 		parseErrs = append(parseErrs, invalid)
 	}
 
-	c.UnixTS, invalid = envvar.LogUnixTS.ParseBool()
+	c.UnixTS, invalid = envvar.LogUnixTS.Parse()
 	if invalid != "" {
 		parseErrs = append(parseErrs, invalid)
 	}

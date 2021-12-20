@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/smartcontractkit/chainlink/core/config/envvar"
-	"github.com/smartcontractkit/chainlink/core/config/parse"
 	"github.com/smartcontractkit/chainlink/core/services/keystore/keys/p2pkey"
 	ocrnetworking "github.com/smartcontractkit/libocr/networking"
 )
@@ -59,14 +58,14 @@ func (c *generalConfig) P2PIncomingMessageBufferSize() int {
 	if c.OCRIncomingMessageBufferSize() != 0 {
 		return c.OCRIncomingMessageBufferSize()
 	}
-	return int(c.getWithFallback("P2PIncomingMessageBufferSize", parse.Uint16).(uint16))
+	return int(getEnvWithFallback(c, envvar.NewUint16("P2PIncomingMessageBufferSize")))
 }
 
 func (c *generalConfig) P2POutgoingMessageBufferSize() int {
 	if c.OCROutgoingMessageBufferSize() != 0 {
 		return c.OCRIncomingMessageBufferSize()
 	}
-	return int(c.getWithFallback("P2PIncomingMessageBufferSize", parse.Uint16).(uint16))
+	return int(getEnvWithFallback(c, envvar.NewUint16("P2PIncomingMessageBufferSize")))
 }
 
 type P2PDeprecated interface {

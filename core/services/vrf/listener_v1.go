@@ -47,7 +47,7 @@ type listenerV1 struct {
 	headBroadcaster httypes.HeadBroadcasterRegistry
 	txm             bulletprooftxmanager.TxManager
 	gethks          GethKeyStore
-	reqLogs         *utils.Mailbox
+	reqLogs         *utils.Mailbox[log.Broadcast]
 	chStop          chan struct{}
 	waitOnStop      chan struct{}
 	newHead         chan struct{}
@@ -217,13 +217,9 @@ func (lsn *listenerV1) runLogListener(unsubscribes []func(), minConfs uint32) {
 		case <-lsn.reqLogs.Notify():
 			// Process all the logs in the queue if one is added
 			for {
-				i, exists := lsn.reqLogs.Retrieve()
+				lb, exists := lsn.reqLogs.Retrieve()
 				if !exists {
 					break
-				}
-				lb, ok := i.(log.Broadcast)
-				if !ok {
-					panic(fmt.Sprintf("VRFListener: invariant violated, expected log.Broadcast got %T", i))
 				}
 				recovery.WrapRecover(lsn.l, func() {
 					lsn.handleLog(lb, minConfs)

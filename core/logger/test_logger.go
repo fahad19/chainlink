@@ -67,7 +67,7 @@ func MemoryLogTestingOnly() *MemorySink {
 // Log level is derived from the LOG_LEVEL env var.
 func TestLogger(t T) Logger {
 	cfg := newTestConfig()
-	ll, invalid := envvar.LogLevel.ParseLogLevel()
+	ll, invalid := envvar.LogLevel.Parse()
 	cfg.Level.SetLevel(ll)
 	l, err := newZapLogger(cfg)
 	if err != nil {
