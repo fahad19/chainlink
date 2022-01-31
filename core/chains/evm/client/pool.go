@@ -49,22 +49,20 @@ func NewPool(logger logger.Logger, nodes []Node, sendonlys []SendOnlyNode, chain
 	return p
 }
 
-// Dial dials every node in the pool and verifies their chain IDs are consistent.
+// Dial starts every node in the pool
 func (p *Pool) Dial(ctx context.Context) error {
 	return p.StartOnce("Pool", func() (merr error) {
 		if len(p.nodes) == 0 {
 			return errors.Errorf("no available nodes for chain %s", p.chainID.String())
 		}
 		for _, n := range p.nodes {
-			if err := n.Dial(ctx); err != nil {
-				p.logger.Errorw("Error dialing node", "node", n, "err", err)
-			} else if err := n.Verify(ctx, p.chainID); err != nil {
-				p.logger.Errorw("Error verifying node", "node", n, "err", err)
-			}
+			// node will handle its own redialing and automatic recovery
+			n.Start(ctx)
 		}
 		for _, s := range p.sendonlys {
-			// TODO: Deal with sendonly nodes state
-			err := s.Dial(ctx)
+			// TODO: Deal with sendonly nodes state?
+			// See: https://app.shortcut.com/chainlinklabs/story/8403/multiple-primary-geth-nodes-with-failover-load-balancer-part-2
+			err := s.Start(ctx)
 			if err != nil {
 				return err
 			}
@@ -76,54 +74,69 @@ func (p *Pool) Dial(ctx context.Context) error {
 	})
 }
 
-// dialRetryInterval controls how often we try to reconnect a dead node
-var dialRetryInterval = 5 * time.Second
-
 func (p *Pool) runLoop() {
 	defer p.wg.Done()
-	ticker := time.NewTicker(dialRetryInterval)
+
+	// FIXME: Use config for this?
+	monitor := time.NewTicker(time.Second)
+	// monitor := time.NewTicker(time.Minute)
+
+	type nodeWithState struct {
+		Node  string
+		State string
+	}
 
 	for {
 		select {
+		case <-monitor.C:
+			// TODO: Add prometheus, more monitoring etc in here
+			var liveNodes, deadNodes int
+			nodeStates := make([]nodeWithState, len(p.nodes))
+			for i, n := range p.nodes {
+				state := n.State()
+				nodeStates[i] = nodeWithState{n.String(), state.String()}
+				if state == NodeStateAlive {
+					liveNodes++
+				} else {
+					deadNodes++
+				}
+			}
+			total := liveNodes + deadNodes
+			p.logger.Tracew(fmt.Sprintf("Pool state: %d/%[1]d nodes live and %d/%[1]d nodes dead", liveNodes, total, deadNodes), "nodeStates", nodeStates)
+			if total == deadNodes {
+				p.logger.Criticalw(fmt.Sprintf("No EVM primary nodes available: 0/%d nodes are alive", total), "nodeStates", nodeStates)
+			} else if deadNodes > 0 {
+				p.logger.Errorw(fmt.Sprintf("At least one EVM primary node is dead: %d/%d nodes are alive", liveNodes, total), "nodeStates", nodeStates)
+			}
 		case <-p.chStop:
 			return
-		case <-ticker.C:
-			// re-dial all dead nodes
-			func() {
-				ctx, cancel := utils.ContextFromChan(p.chStop)
-				defer cancel()
-				ctx, cancel = context.WithTimeout(ctx, dialRetryInterval)
-				defer cancel()
-				// TODO: How does this play with automatic WS reconnects?
-				p.redialDeadNodes(ctx)
-			}()
 		}
 	}
 }
 
-func (p *Pool) redialDeadNodes(ctx context.Context) {
-	for _, n := range p.nodes {
-		if n.State() == NodeStateDead {
-			if err := n.Dial(ctx); err != nil {
-				p.logger.Errorw(fmt.Sprintf("Failed to redial eth node: %v", err), "err", err, "node", n.String())
-			}
-		}
-		if n.State() == NodeStateInvalidChainID || n.State() == NodeStateDialed {
-			if err := n.Verify(ctx, p.chainID); err != nil {
-				p.logger.Errorw(fmt.Sprintf("Failed to verify eth node: %v", err), "err", err, "node", n.String())
-			}
-		}
-	}
-}
-
+// Close tears down the pool and closes all nodes
 func (p *Pool) Close() {
 	//nolint:errcheck
 	p.StopOnce("Pool", func() error {
 		close(p.chStop)
 		p.wg.Wait()
+
+		var closeWg sync.WaitGroup
+		closeWg.Add(len(p.nodes))
 		for _, n := range p.nodes {
-			n.Close()
+			go func() {
+				defer closeWg.Done()
+				n.Close()
+			}()
 		}
+		closeWg.Add(len(p.sendonlys))
+		for _, s := range p.sendonlys {
+			go func() {
+				defer closeWg.Done()
+				s.Close()
+			}()
+		}
+		closeWg.Wait()
 		return nil
 	})
 }
@@ -132,10 +145,12 @@ func (p *Pool) ChainID() *big.Int {
 	return p.chainID
 }
 
+// TODO: Handle case where all nodes are out-of-sync
 func (p *Pool) getRoundRobin() Node {
 	nodes := p.liveNodes()
 	nNodes := len(nodes)
 	if nNodes == 0 {
+		// TODO: No nodes available should be logging at CRIT
 		return &erroringNode{errMsg: fmt.Sprintf("no live nodes available for chain %s", p.chainID.String())}
 	}
 

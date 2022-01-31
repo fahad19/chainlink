@@ -21,9 +21,7 @@ func (e *erroringNode) ChainID(ctx context.Context) (chainID *big.Int, err error
 	return nil, errors.New(e.errMsg)
 }
 
-func (e *erroringNode) Dial(ctx context.Context) error {
-	return errors.New(e.errMsg)
-}
+func (e *erroringNode) Start(ctx context.Context) error { return errors.New(e.errMsg) }
 
 func (e *erroringNode) Close() {}
 
@@ -108,5 +106,9 @@ func (e *erroringNode) String() string {
 }
 
 func (e *erroringNode) State() NodeState {
-	return NodeStateDead
+	return NodeStateUnreachable
 }
+
+func (e *erroringNode) DeclareOutOfSync()   {}
+func (e *erroringNode) DeclareInSync()      {}
+func (e *erroringNode) DeclareUnreachable() {}

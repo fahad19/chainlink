@@ -482,7 +482,7 @@ func CombinedContext(signals ...interface{}) (context.Context, context.CancelFun
 	signals = append(signals, ctx)
 
 	var cases []reflect.SelectCase
-	var cancel2 context.CancelFunc
+	var cancels []context.CancelFunc
 	for _, signal := range signals {
 		var ch reflect.Value
 
@@ -494,8 +494,8 @@ func CombinedContext(signals ...interface{}) (context.Context, context.CancelFun
 		case chan struct{}:
 			ch = reflect.ValueOf(sig)
 		case time.Duration:
-			var ctxTimeout context.Context
-			ctxTimeout, cancel2 = context.WithTimeout(ctx, sig)
+			ctxTimeout, cancel2 := context.WithTimeout(ctx, sig)
+			cancels = append(cancels, cancel2)
 			ch = reflect.ValueOf(ctxTimeout.Done())
 		default:
 			panic(fmt.Sprintf("utils.CombinedContext cannot accept a value of type %T, skipping", sig))
@@ -505,8 +505,8 @@ func CombinedContext(signals ...interface{}) (context.Context, context.CancelFun
 
 	go func() {
 		defer cancel()
-		if cancel2 != nil {
-			defer cancel2()
+		for _, cancel := range cancels {
+			defer cancel()
 		}
 		_, _, _ = reflect.Select(cases)
 	}()
