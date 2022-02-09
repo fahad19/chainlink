@@ -86,7 +86,7 @@ func TestLogger(t T) Logger {
 	if t == nil {
 		return l
 	}
-	return l.Named(t.Name())
+	return l.Named(baseLoggerName()).Named(t.Name())
 }
 
 func newTestConfig() zap.Config {
