@@ -97,7 +97,6 @@ type GeneralConfigOverrides struct {
 	LogLevel                                  *zapcore.Level
 	DefaultLogLevel                           *zapcore.Level
 	LogSQL                                    null.Bool
-	LogToDisk                                 null.Bool
 	SecretGenerator                           config.SecretGenerator
 	TriggerFallbackDBPollInterval             *time.Duration
 	KeySpecific                               map[string]types.ChainCfg
@@ -339,13 +338,6 @@ func (c *TestGeneralConfig) TriggerFallbackDBPollInterval() time.Duration {
 		return *c.Overrides.TriggerFallbackDBPollInterval
 	}
 	return c.GeneralConfig.TriggerFallbackDBPollInterval()
-}
-
-func (c *TestGeneralConfig) LogToDisk() bool {
-	if c.Overrides.LogToDisk.Valid {
-		return c.Overrides.LogToDisk.Bool
-	}
-	return c.GeneralConfig.LogToDisk()
 }
 
 func (c *TestGeneralConfig) AdminCredentialsFile() string {
