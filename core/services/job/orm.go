@@ -325,12 +325,12 @@ func (o *orm) InsertJob(job *Job, qopts ...pg.QOpt) error {
 		VALUES (:pipeline_spec_id, :name, :schema_version, :type, :max_task_duration, :offchainreporting_oracle_spec_id, :offchainreporting2_oracle_spec_id, :direct_request_spec_id, :flux_monitor_spec_id,
 				:keeper_spec_id, :cron_spec_id, :vrf_spec_id, :webhook_spec_id, :blockhash_store_spec_id, :bootstrap_spec_id, :external_job_id, NOW())
 		RETURNING *;`
-	o.lggr.Infof("%+v\n", job)
 	return q.GetNamed(query, job, job)
 }
 
 // DeleteJob removes a job
 func (o *orm) DeleteJob(id int32, qopts ...pg.QOpt) error {
+	o.lggr.Debugw("Deleting job", "jobID", id)
 	q := o.q.WithOpts(qopts...)
 	query := `
 		WITH deleted_jobs AS (
@@ -390,6 +390,7 @@ func (o *orm) DeleteJob(id int32, qopts ...pg.QOpt) error {
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
+	o.lggr.Debugw("Deleted job", "jobID", id)
 	return nil
 }
 
