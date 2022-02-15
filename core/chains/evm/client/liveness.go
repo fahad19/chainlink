@@ -38,7 +38,8 @@ func (n *node) aliveLoop() {
 	if deadAfter > 0 {
 		lggr.Debugw("Head liveness checking enabled", "deadAfterThreshold", deadAfter)
 		var err error
-		ch, sub, err = n.subscribeHeads()
+		ch = make(chan *evmtypes.Head)
+		sub, err = n.EthSubscribe(context.Background(), ch, "newHeads")
 		if err != nil {
 			lggr.Errorw("Initial subscribe for liveness checking failed", "nodeState", n.State())
 			n.declareUnreachable()
@@ -121,16 +122,6 @@ func (n *node) aliveLoop() {
 	}
 }
 
-// subscribeHeads is used for internal liveness checking
-func (n *node) subscribeHeads() (ch chan *evmtypes.Head, sub ethereum.Subscription, err error) {
-	subCtx, cancel := n.ctxWithDefaultTimeout()
-	defer cancel()
-	ch = make(chan *evmtypes.Head)
-	sub, err = n.EthSubscribe(subCtx, ch, "newHeads")
-	err = errors.Wrap(err, "failed to subscribeHeads")
-	return
-}
-
 // outOfSyncLoop takes an OutOfSync node and puts it back to live status if it
 // receives a later head than one we have already seen
 func (n *node) outOfSyncLoop(stuckAtBlockNumber int64) {
@@ -140,32 +131,33 @@ func (n *node) outOfSyncLoop(stuckAtBlockNumber int64) {
 		panic(fmt.Sprintf("outOfSyncLoop can only run for node in OutOfSync state, got: %s", state))
 	}
 
-	diedAt := time.Now()
+	outOfSyncAt := time.Now()
 
 	lggr := n.log.Named("OutOfSync")
 	lggr.Debugw("Trying to revive out-of-sync node", "nodeState", n.State())
 
 	// Need to redial since out-of-sync nodes are automatically disconnected
 	ctx, cancel := n.ctxWithDefaultTimeout()
-	if err := n.dial(ctx); err != nil {
+	err := n.dial(ctx)
+	cancel()
+	if err != nil {
 		cancel()
 		lggr.Errorw("Failed to dial out-of-sync node", "nodeState", n.State())
 		n.declareUnreachable()
 		return
 	}
-	cancel()
 
 	n.setState(NodeStateDialed)
 
 	// Manually re-verify since out-of-sync nodes are automatically disconnected
 	verifyCtx, cancel := n.ctxWithDefaultTimeout()
-	if err := n.verify(verifyCtx); err != nil {
-		cancel()
+	err = n.verify(verifyCtx)
+	cancel()
+	if err != nil {
 		n.log.Errorw(fmt.Sprintf("Failed to verify out-of-sync node: %v", err), "err", err)
 		n.declareInvalidChainID()
 		return
 	}
-	cancel()
 
 	n.setState(NodeStateOutOfSync)
 
@@ -175,6 +167,7 @@ func (n *node) outOfSyncLoop(stuckAtBlockNumber int64) {
 	subCtx, cancel := n.ctxWithDefaultTimeout()
 	// raw call here to bypass node state checking
 	sub, err := n.ws.rpc.EthSubscribe(subCtx, ch, "newHeads")
+	cancel()
 	if err != nil {
 		lggr.Errorw("Failed to subscribe heads on out-of-sync node", "nodeState", n.State(), "err", err)
 		n.declareUnreachable()
@@ -182,11 +175,9 @@ func (n *node) outOfSyncLoop(stuckAtBlockNumber int64) {
 	}
 	defer sub.Unsubscribe()
 
-	nodeCtx := n.getCtx()
-
 	for {
 		select {
-		case <-nodeCtx.Done():
+		case <-n.getCtx().Done():
 			return
 		case head, open := <-ch:
 			if !open {
@@ -196,7 +187,7 @@ func (n *node) outOfSyncLoop(stuckAtBlockNumber int64) {
 			}
 			if head.Number > stuckAtBlockNumber {
 				// unstuck! flip back into alive loop
-				lggr.Infow(fmt.Sprintf("Received new block for node %s. Node was offline for %s", n.String(), time.Since(diedAt)), "latestReceivedBlockNumber", head.Number, "nodeState", n.State())
+				lggr.Infow(fmt.Sprintf("Received new block for node %s. Node was offline for %s", n.String(), time.Since(outOfSyncAt)), "latestReceivedBlockNumber", head.Number, "nodeState", n.State())
 				n.declareInSync()
 				return
 			}

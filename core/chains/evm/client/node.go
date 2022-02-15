@@ -132,9 +132,6 @@ type node struct {
 	cancel context.CancelFunc
 	// wg waits for subsidiary goroutines
 	wg sync.WaitGroup
-
-	// only set when liveness checking is enabled
-	lastSeenBlockNumber atomic.Uint64
 }
 
 // NodeConfig allows configuration of the node
@@ -291,11 +288,9 @@ func (n *node) Close() {
 	//nolint:errcheck
 	n.StopOnce(n.name, func() error {
 		n.stateMu.Lock()
-		n.cancel()
-		n.stateMu.Unlock()
-		n.wg.Wait()
-		n.stateMu.Lock()
 		defer n.stateMu.Unlock()
+		// FIXME: This can deadlock; need a dedicated shutdown channel for liveness goroutines
+		n.cancel()
 		n.state = NodeStateClosed
 		if n.ws.rpc != nil {
 			n.ws.rpc.Close()

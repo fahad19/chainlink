@@ -79,6 +79,7 @@ func (p *Pool) runLoop() {
 
 	// FIXME: Use config for this?
 	monitor := time.NewTicker(time.Second)
+	defer monitor.Stop()
 	// monitor := time.NewTicker(time.Minute)
 
 	type nodeWithState struct {
