@@ -3,8 +3,8 @@ name: Dependency Vulnerability Check
 on: 
   push:
     paths:
-      - '*/**'
-      - '!contracts/**'
+      - '**/go.mod'
+      - '**/go.sum'
 jobs:
   Go:
     runs-on: ubuntu-latest
