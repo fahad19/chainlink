@@ -8,9 +8,11 @@ on:
       - rollup
     paths:
       - 'operator_ui/**'
+      - yarn.lock
   pull_request:
     paths:
       - 'operator_ui/**'
+      - yarn.lock
 
 jobs:
   operator-ui:

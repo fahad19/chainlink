@@ -8,9 +8,11 @@ on:
       - rollup
     paths:
       - 'contracts/**'
+      - yarn.lock
   pull_request:
     paths:
       - 'contracts/**'
+      - yarn.lock
 
 jobs:
   solidity-coverage:
