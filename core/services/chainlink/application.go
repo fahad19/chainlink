@@ -147,7 +147,17 @@ type ApplicationOpts struct {
 // Chains holds a ChainSet for each type of chain.
 type Chains struct {
 	EVM   evm.ChainSet
-	Terra terra.ChainSet
+	Terra terra.ChainSet // nil if disabled
+}
+
+func (c *Chains) services() (s []services.Service) {
+	if c.EVM != nil {
+		s = append(s, c.EVM)
+	}
+	if c.Terra != nil {
+		s = append(s, c.Terra)
+	}
+	return
 }
 
 // NewApplication initializes a new store if one is not already
@@ -220,7 +230,8 @@ func NewApplication(opts ApplicationOpts) (Application, error) {
 		globalLogger.Info("DatabaseBackup: periodic database backups are disabled. To enable automatic backups, set DATABASE_BACKUP_MODE=lite or DATABASE_BACKUP_MODE=full")
 	}
 
-	subservices = append(subservices, eventBroadcaster, chains.EVM)
+	subservices = append(subservices, eventBroadcaster)
+	subservices = append(subservices, chains.services()...)
 	promReporter := promreporter.NewPromReporter(db.DB, globalLogger)
 	subservices = append(subservices, promReporter)
 

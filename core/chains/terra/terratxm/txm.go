@@ -25,7 +25,10 @@ import (
 	"github.com/smartcontractkit/chainlink/core/utils"
 )
 
-var _ services.Service = (*Txm)(nil)
+var (
+	_ services.Service  = (*Txm)(nil)
+	_ terra.MsgEnqueuer = (*Txm)(nil)
+)
 
 // Txm manages transactions for the terra blockchain.
 type Txm struct {
@@ -74,7 +77,7 @@ func (txm *Txm) Start() error {
 func (txm *Txm) confirmAnyUnconfirmed(ctx context.Context) {
 	// Confirm any broadcasted but not confirmed txes.
 	// This is an edge case if we crash after having broadcasted but before we confirm.
-	broadcasted, err := txm.orm.SelectMsgsWithState(db.Broadcasted)
+	broadcasted, err := txm.orm.GetMsgsState(db.Broadcasted)
 	if err != nil {
 		// Should never happen but if so, theoretically can retry with a reboot
 		txm.lggr.Criticalw("unable to look for broadcasted but unconfirmed txes", "err", err)
@@ -125,7 +128,7 @@ func (txm *Txm) run() {
 }
 
 func (txm *Txm) sendMsgBatch(ctx context.Context) {
-	unstarted, err := txm.orm.SelectMsgsWithState(db.Unstarted)
+	unstarted, err := txm.orm.GetMsgsState(db.Unstarted)
 	if err != nil {
 		txm.lggr.Errorw("unable to read unstarted msgs", "err", err)
 		return
@@ -205,7 +208,7 @@ func (txm *Txm) sendMsgBatchFromAddress(ctx context.Context, gasPrice sdk.DecCoi
 		return
 	}
 	txm.lggr.Debugw("simulation results", "from", sender, "succeeded", simResults.Succeeded, "failed", simResults.Failed)
-	err = txm.orm.UpdateMsgsWithState(simResults.Failed.GetSimMsgsIDs(), db.Errored, nil)
+	err = txm.orm.UpdateMsgs(simResults.Failed.GetSimMsgsIDs(), db.Errored, nil)
 	if err != nil {
 		txm.lggr.Errorw("unable to mark failed sim txes as errored", "err", err, "from", sender.String())
 		// If we can't mark them as failed retry on next poll. Presumably same ones will fail.
@@ -246,7 +249,7 @@ func (txm *Txm) sendMsgBatchFromAddress(ctx context.Context, gasPrice sdk.DecCoi
 	var resp *txtypes.BroadcastTxResponse
 	err = txm.orm.q.Transaction(func(tx pg.Queryer) error {
 		txHash := strings.ToUpper(hex.EncodeToString(tmhash.Sum(signedTx)))
-		err = txm.orm.UpdateMsgsWithState(simResults.Succeeded.GetSimMsgsIDs(), db.Broadcasted, &txHash, pg.WithQueryer(tx))
+		err = txm.orm.UpdateMsgs(simResults.Succeeded.GetSimMsgsIDs(), db.Broadcasted, &txHash, pg.WithQueryer(tx))
 		if err != nil {
 			return err
 		}
@@ -327,7 +330,7 @@ func (txm *Txm) confirmTx(ctx context.Context, tc terraclient.Reader, txHash str
 
 		txm.lggr.Infow("successfully sent batch", "hash", txHash, "msgs", broadcasted)
 		// If confirmed mark these as completed.
-		err = txm.orm.UpdateMsgsWithState(broadcasted, db.Confirmed, nil)
+		err = txm.orm.UpdateMsgs(broadcasted, db.Confirmed, nil)
 		if err != nil {
 			return err
 		}
@@ -336,7 +339,7 @@ func (txm *Txm) confirmTx(ctx context.Context, tc terraclient.Reader, txHash str
 	txm.lggr.Errorw("unable to confirm tx after timeout period, marking errored", "hash", txHash)
 	// If we are unable to confirm the tx after the timeout period
 	// mark these msgs as errored
-	err := txm.orm.UpdateMsgsWithState(broadcasted, db.Errored, nil)
+	err := txm.orm.UpdateMsgs(broadcasted, db.Errored, nil)
 	if err != nil {
 		txm.lggr.Errorw("unable to mark timed out txes as errored", "err", err, "txes", broadcasted, "num", len(broadcasted))
 		return err
@@ -364,6 +367,10 @@ func (txm *Txm) Enqueue(contractID string, msg []byte) (int64, error) {
 	// the enqueue time. Enqueue is used in the context of OCRs Transmit
 	// and must be fast, so we do the minimum of a db write.
 	return txm.orm.InsertMsg(contractID, msg)
+}
+
+func (txm *Txm) GetMsgs(ids ...int64) (terra.Msgs, error) {
+	return txm.orm.GetMsgs(ids...)
 }
 
 // Close close service

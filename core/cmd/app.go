@@ -897,42 +897,74 @@ func NewApp(client *Client) *cli.App {
 
 		{
 			Name:  "txs",
-			Usage: "Commands for handling Ethereum transactions",
+			Usage: "Commands for handling transactions",
 			Subcommands: []cli.Command{
 				{
-					Name:   "create",
-					Usage:  "Send <amount> ETH (or wei) from node ETH account <fromAddress> to destination <toAddress>.",
-					Action: client.SendEther,
-					Flags: []cli.Flag{
-						cli.BoolFlag{
-							Name:  "force",
-							Usage: "allows to send a higher amount than the account's balance",
+					Name:  "evm",
+					Usage: "Commands for handling EVM transactions",
+					Subcommands: []cli.Command{
+						{
+							Name:   "create",
+							Usage:  "Send <amount> ETH (or wei) from node ETH account <fromAddress> to destination <toAddress>.",
+							Action: client.SendEther,
+							Flags: []cli.Flag{
+								cli.BoolFlag{
+									Name:  "force",
+									Usage: "allows to send a higher amount than the account's balance",
+								},
+								cli.BoolFlag{
+									Name:  "eth",
+									Usage: "allows to send ETH amounts (Default behavior)",
+								},
+								cli.BoolFlag{
+									Name:  "wei",
+									Usage: "allows to send WEI amounts",
+								},
+								cli.Int64Flag{
+									Name:  "id",
+									Usage: "chain ID",
+								},
+							},
 						},
-						cli.BoolFlag{
-							Name:  "eth",
-							Usage: "allows to send ETH amounts (Default behavior)",
+						{
+							Name:   "list",
+							Usage:  "List the Ethereum Transactions in descending order",
+							Action: client.IndexTransactions,
+							Flags: []cli.Flag{
+								cli.IntFlag{
+									Name:  "page",
+									Usage: "page of results to display",
+								},
+							},
 						},
-						cli.BoolFlag{
-							Name:  "wei",
-							Usage: "allows to send WEI amounts",
+						{
+							Name:   "show",
+							Usage:  "get information on a specific Ethereum Transaction",
+							Action: client.ShowTransaction,
 						},
 					},
 				},
 				{
-					Name:   "list",
-					Usage:  "List the Ethereum Transactions in descending order",
-					Action: client.IndexTransactions,
-					Flags: []cli.Flag{
-						cli.IntFlag{
-							Name:  "page",
-							Usage: "page of results to display",
+					Name:  "terra",
+					Usage: "Commands for handling Terra transactions",
+					Subcommands: []cli.Command{
+						{
+							Name:   "create",
+							Usage:  "Send <coins> from node Terra account <fromAddress> to destination <toAddress>, where coins is a comma separated list: <amount><denom>[,<amount><denom>]",
+							Action: client.TerraSendCoins,
+							Flags: []cli.Flag{
+								cli.BoolFlag{
+									Name:  "force",
+									Usage: "allows to send a higher amount than the account's balance",
+								},
+								cli.Int64Flag{
+									Name:  "id",
+									Usage: "chain ID",
+								},
+							},
 						},
+						//TODO show?
 					},
-				},
-				{
-					Name:   "show",
-					Usage:  "get information on a specific Ethereum Transaction",
-					Action: client.ShowTransaction,
 				},
 			},
 		},

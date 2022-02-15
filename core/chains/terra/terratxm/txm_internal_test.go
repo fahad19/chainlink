@@ -98,7 +98,7 @@ func TestTxm(t *testing.T) {
 		txm.sendMsgBatch(testutils.Context(t))
 
 		// Should be in completed state
-		completed, err := txm.orm.SelectMsgsWithIDs([]int64{id1})
+		completed, err := txm.orm.GetMsgs(id1)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(completed))
 		assert.Equal(t, completed[0].State, Confirmed)
@@ -160,7 +160,7 @@ func TestTxm(t *testing.T) {
 		txm.sendMsgBatch(testutils.Context(t))
 
 		// Should be in completed state
-		completed, err := txm.orm.SelectMsgsWithIDs([]int64{id1, id2})
+		completed, err := txm.orm.GetMsgs(id1, id2)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(completed))
 		assert.Equal(t, completed[0].State, Confirmed)
@@ -180,10 +180,10 @@ func TestTxm(t *testing.T) {
 		i, err := txm.orm.InsertMsg("blah", []byte{0x01})
 		require.NoError(t, err)
 		txh := "0x123"
-		require.NoError(t, txm.orm.UpdateMsgsWithState([]int64{i}, Broadcasted, &txh))
+		require.NoError(t, txm.orm.UpdateMsgs([]int64{i}, Broadcasted, &txh))
 		err = txm.confirmTx(testutils.Context(t), tc, txh, []int64{i}, 2, 1*time.Millisecond)
 		require.NoError(t, err)
-		m, err := txm.orm.SelectMsgsWithIDs([]int64{i})
+		m, err := txm.orm.GetMsgs(i)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
 		assert.Equal(t, Errored, m[0].State)
@@ -208,15 +208,15 @@ func TestTxm(t *testing.T) {
 		require.NoError(t, err)
 		id2, err := txm.orm.InsertMsg("blah", []byte{0x02})
 		require.NoError(t, err)
-		err = txm.orm.UpdateMsgsWithState([]int64{id1}, Broadcasted, &txHash1)
+		err = txm.orm.UpdateMsgs([]int64{id1}, Broadcasted, &txHash1)
 		require.NoError(t, err)
-		err = txm.orm.UpdateMsgsWithState([]int64{id2}, Broadcasted, &txHash2)
+		err = txm.orm.UpdateMsgs([]int64{id2}, Broadcasted, &txHash2)
 		require.NoError(t, err)
 
 		// Confirm them as in a restart while confirming scenario
 		txm.confirmAnyUnconfirmed(testutils.Context(t))
 		require.NoError(t, err)
-		confirmed, err := txm.orm.SelectMsgsWithIDs([]int64{id1, id2})
+		confirmed, err := txm.orm.GetMsgs(id1, id2)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(confirmed))
 		assert.Equal(t, Confirmed, confirmed[0].State)

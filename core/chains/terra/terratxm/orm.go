@@ -39,8 +39,8 @@ func (o *ORM) InsertMsg(contractID string, msg []byte) (int64, error) {
 	return tm.ID, nil
 }
 
-// SelectMsgsWithState selects all messages with a given state
-func (o *ORM) SelectMsgsWithState(state db.State) (terra.Msgs, error) {
+// GetMsgsState returns all messages with a given state.
+func (o *ORM) GetMsgsState(state db.State) (terra.Msgs, error) {
 	var msgs terra.Msgs
 	if err := o.q.Select(&msgs, `SELECT * FROM terra_msgs WHERE state = $1 AND terra_chain_id = $2`, state, o.chainID); err != nil {
 		return nil, err
@@ -48,8 +48,8 @@ func (o *ORM) SelectMsgsWithState(state db.State) (terra.Msgs, error) {
 	return msgs, nil
 }
 
-// SelectMsgsWithIDs selects messages the given ids
-func (o *ORM) SelectMsgsWithIDs(ids []int64) (terra.Msgs, error) {
+// GetMsgs returns any messages matching ids.
+func (o *ORM) GetMsgs(ids ...int64) (terra.Msgs, error) {
 	var msgs terra.Msgs
 	if err := o.q.Select(&msgs, `SELECT * FROM terra_msgs WHERE id = ANY($1)`, ids); err != nil {
 		return nil, err
@@ -57,9 +57,9 @@ func (o *ORM) SelectMsgsWithIDs(ids []int64) (terra.Msgs, error) {
 	return msgs, nil
 }
 
-// UpdateMsgsWithState update the msgs with the given ids to the given state
+// UpdateMsgs updates msgs with the given ids.
 // Note state transitions are validated at the db level.
-func (o *ORM) UpdateMsgsWithState(ids []int64, state db.State, txHash *string, qopts ...pg.QOpt) error {
+func (o *ORM) UpdateMsgs(ids []int64, state db.State, txHash *string, qopts ...pg.QOpt) error {
 	if state == db.Broadcasted && txHash == nil {
 		return errors.New("txHash is required when updating to broadcasted")
 	}

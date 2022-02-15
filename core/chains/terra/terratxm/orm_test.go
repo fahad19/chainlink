@@ -31,7 +31,7 @@ func TestORM(t *testing.T) {
 	assert.NotEqual(t, 0, int(mid))
 
 	// Read
-	unstarted, err := o.SelectMsgsWithState(Unstarted)
+	unstarted, err := o.GetMsgsState(Unstarted)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(unstarted))
 	assert.Equal(t, "hello", string(unstarted[0].Raw))
@@ -40,9 +40,9 @@ func TestORM(t *testing.T) {
 
 	// Update
 	txHash := "123"
-	err = o.UpdateMsgsWithState([]int64{mid}, Broadcasted, &txHash)
+	err = o.UpdateMsgs([]int64{mid}, Broadcasted, &txHash)
 	require.NoError(t, err)
-	broadcasted, err := o.SelectMsgsWithState(Broadcasted)
+	broadcasted, err := o.GetMsgsState(Broadcasted)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(broadcasted))
 	assert.Equal(t, broadcasted[0].Raw, unstarted[0].Raw)
@@ -50,9 +50,9 @@ func TestORM(t *testing.T) {
 	assert.Equal(t, *broadcasted[0].TxHash, txHash)
 	assert.Equal(t, chainID, broadcasted[0].ChainID)
 
-	err = o.UpdateMsgsWithState([]int64{mid}, Confirmed, nil)
+	err = o.UpdateMsgs([]int64{mid}, Confirmed, nil)
 	require.NoError(t, err)
-	confirmed, err := o.SelectMsgsWithState(Confirmed)
+	confirmed, err := o.GetMsgsState(Confirmed)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(confirmed))
 }

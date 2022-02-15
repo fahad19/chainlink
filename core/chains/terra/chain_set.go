@@ -113,6 +113,9 @@ func (c *chainSet) ORM() types.ORM {
 }
 
 func (c *chainSet) Chain(id string) (terra.Chain, error) {
+	if id == "" {
+		return nil, errors.New("id must not be empty")
+	}
 	if err := c.StartStopOnce.Ready(); err != nil {
 		return nil, err
 	}
