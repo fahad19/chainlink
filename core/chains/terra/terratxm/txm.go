@@ -74,31 +74,33 @@ func (txm *Txm) Start() error {
 func (txm *Txm) confirmAnyUnconfirmed(ctx context.Context) {
 	// Confirm any broadcasted but not confirmed txes.
 	// This is an edge case if we crash after having broadcasted but before we confirm.
-	broadcasted, err := txm.orm.SelectMsgsWithState(db.Broadcasted)
-	if err != nil {
-		// Should never happen but if so, theoretically can retry with a reboot
-		txm.lggr.Criticalw("unable to look for broadcasted but unconfirmed txes", "err", err)
-		return
-	}
-	if len(broadcasted) == 0 {
-		return
-	}
-	tc, err := txm.tc()
-	if err != nil {
-		txm.lggr.Criticalw("unable to get client for handling broadcasted but unconfirmed txes", "count", len(broadcasted), "err", err)
-		return
-	}
-	msgsByTxHash := make(map[string]terra.Msgs)
-	for _, msg := range broadcasted {
-		msgsByTxHash[*msg.TxHash] = append(msgsByTxHash[*msg.TxHash], msg)
-	}
-	for txHash, msgs := range msgsByTxHash {
-		maxPolls, pollPeriod := txm.confirmPollConfig()
-		err := txm.confirmTx(ctx, tc, txHash, msgs.GetIDs(), maxPolls, pollPeriod)
+	for {
+		broadcasted, err := txm.orm.SelectMsgsWithState(db.Broadcasted, txm.cfg.MaxMsgsPerBatch())
 		if err != nil {
-			txm.lggr.Errorw("unable to confirm broadcasted but unconfirmed txes", "err", err, "txhash", txHash)
-			if ctx.Err() != nil {
-				return
+			// Should never happen but if so, theoretically can retry with a reboot
+			txm.lggr.Criticalw("unable to look for broadcasted but unconfirmed txes", "err", err)
+			return
+		}
+		if len(broadcasted) == 0 {
+			return
+		}
+		tc, err := txm.tc()
+		if err != nil {
+			txm.lggr.Criticalw("unable to get client for handling broadcasted but unconfirmed txes", "count", len(broadcasted), "err", err)
+			return
+		}
+		msgsByTxHash := make(map[string]terra.Msgs)
+		for _, msg := range broadcasted {
+			msgsByTxHash[*msg.TxHash] = append(msgsByTxHash[*msg.TxHash], msg)
+		}
+		for txHash, msgs := range msgsByTxHash {
+			maxPolls, pollPeriod := txm.confirmPollConfig()
+			err := txm.confirmTx(ctx, tc, txHash, msgs.GetIDs(), maxPolls, pollPeriod)
+			if err != nil {
+				txm.lggr.Errorw("unable to confirm broadcasted but unconfirmed txes", "err", err, "txhash", txHash)
+				if ctx.Err() != nil {
+					return
+				}
 			}
 		}
 	}
@@ -125,57 +127,56 @@ func (txm *Txm) run() {
 }
 
 func (txm *Txm) sendMsgBatch(ctx context.Context) {
-	unstarted, err := txm.orm.SelectMsgsWithState(db.Unstarted)
-	if err != nil {
-		txm.lggr.Errorw("unable to read unstarted msgs", "err", err)
-		return
-	}
-	if len(unstarted) == 0 {
-		return
-	}
-	if max := txm.cfg.MaxMsgsPerBatch(); int64(len(unstarted)) > max {
-		unstarted = unstarted[:max+1]
-	}
-	txm.lggr.Debugw("building a batch", "batch", unstarted)
-	var msgsByFrom = make(map[string]terra.Msgs)
-	for _, m := range unstarted {
-		var ms wasmtypes.MsgExecuteContract
-		err := ms.Unmarshal(m.Raw)
+	for {
+		unstarted, err := txm.orm.SelectMsgsWithState(db.Unstarted, txm.cfg.MaxMsgsPerBatch())
 		if err != nil {
-			// Should be impossible given the check in Enqueue
-			txm.lggr.Criticalw("failed to unmarshal msg, skipping", "err", err, "msg", m)
-			continue
-		}
-		m.ExecuteContract = &ms
-		_, err = sdk.AccAddressFromBech32(ms.Sender)
-		if err != nil {
-			// Should never happen, we parse sender on Enqueue
-			txm.lggr.Errorw("unable to parse sender", "err", err, "sender", ms.Sender)
-			continue
-		}
-		msgsByFrom[ms.Sender] = append(msgsByFrom[ms.Sender], m)
-	}
-
-	txm.lggr.Debugw("msgsByFrom", "msgsByFrom", msgsByFrom)
-	prices := txm.gpe.GasPrices()
-	gasPrice, ok := prices["uluna"]
-	if !ok {
-		// Should be impossible
-		txm.lggr.Criticalw("unexpected empty uluna price")
-		return
-	}
-	for s, msgs := range msgsByFrom {
-		sender, _ := sdk.AccAddressFromBech32(s) // Already checked validity above
-		key, err := txm.ks.Get(sender.String())
-		if err != nil {
-			txm.lggr.Errorw("unable to find key for from address", "err", err, "from", sender.String())
-			// We check the transmitter key exists when the job is added. So it would have to be deleted
-			// after it was added for this to happen. Retry on next poll should the key be re-added.
-			continue
-		}
-		txm.sendMsgBatchFromAddress(ctx, gasPrice, sender, key, msgs)
-		if ctx.Err() != nil {
+			txm.lggr.Errorw("unable to read unstarted msgs", "err", err)
 			return
+		}
+		if len(unstarted) == 0 {
+			return
+		}
+		txm.lggr.Debugw("building a batch", "batch", unstarted)
+		var msgsByFrom = make(map[string]terra.Msgs)
+		for _, m := range unstarted {
+			var ms wasmtypes.MsgExecuteContract
+			err := ms.Unmarshal(m.Raw)
+			if err != nil {
+				// Should be impossible given the check in Enqueue
+				txm.lggr.Criticalw("failed to unmarshal msg, skipping", "err", err, "msg", m)
+				continue
+			}
+			m.ExecuteContract = &ms
+			_, err = sdk.AccAddressFromBech32(ms.Sender)
+			if err != nil {
+				// Should never happen, we parse sender on Enqueue
+				txm.lggr.Errorw("unable to parse sender", "err", err, "sender", ms.Sender)
+				continue
+			}
+			msgsByFrom[ms.Sender] = append(msgsByFrom[ms.Sender], m)
+		}
+
+		txm.lggr.Debugw("msgsByFrom", "msgsByFrom", msgsByFrom)
+		prices := txm.gpe.GasPrices()
+		gasPrice, ok := prices["uluna"]
+		if !ok {
+			// Should be impossible
+			txm.lggr.Criticalw("unexpected empty uluna price")
+			return
+		}
+		for s, msgs := range msgsByFrom {
+			sender, _ := sdk.AccAddressFromBech32(s) // Already checked validity above
+			key, err := txm.ks.Get(sender.String())
+			if err != nil {
+				txm.lggr.Errorw("unable to find key for from address", "err", err, "from", sender.String())
+				// We check the transmitter key exists when the job is added. So it would have to be deleted
+				// after it was added for this to happen. Retry on next poll should the key be re-added.
+				continue
+			}
+			txm.sendMsgBatchFromAddress(ctx, gasPrice, sender, key, msgs)
+			if ctx.Err() != nil {
+				return
+			}
 		}
 	}
 }
