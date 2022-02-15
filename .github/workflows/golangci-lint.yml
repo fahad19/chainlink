@@ -7,12 +7,10 @@ on:
       - try
       - rollup
     paths:
-      - '*/**'
-      - '!contracts/**'
+      - '**.go'
   pull_request:
     paths:
-      - '*/**'
-      - '!contracts/**'
+      - '**.go'
 
 jobs:
   golangci:
