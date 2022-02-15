@@ -1,6 +1,10 @@
 name: Dependency Vulnerability Check
 
-on: [push]
+on: 
+  push:
+    paths:
+      - '*/**'
+      - '!contracts/**'
 jobs:
   Go:
     runs-on: ubuntu-latest

@@ -6,7 +6,11 @@ on:
       - auto
       - try
       - rollup
+    paths:
+      - 'contracts/**'
   pull_request:
+    paths:
+      - 'contracts/**'
 
 jobs:
   solidity-coverage:

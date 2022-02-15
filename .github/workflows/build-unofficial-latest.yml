@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - "develop"
+    paths:
+      - '*/**'
+      - '!contracts/**'
 jobs:
   build-chainlink:
     name: Build Chainlink Image

@@ -9,6 +9,9 @@ on:
       - master
       - develop
       - 'release/*'
+    paths:
+      - '*/**'
+      - '!contracts/**'
 
 jobs:
   build-sign-publish-chainlink:
